@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import crypto from "crypto";
 import Parser from 'rss-parser';
+import cors from "cors";
 
 const rssParser = new Parser({
   headers: {
@@ -331,7 +332,10 @@ async function fetchNodeHealth(url: string) {
 
 // ---- Background Worker: Infinite Multi-Source Market & News Aggregator ----
 // This runs globally on the server to prevent excessive rate-limiting and make UI incredibly fast.
+let isSyncing = false;
 async function syncGlobalIntelligence() {
+  if (isSyncing) return;
+  isSyncing = true;
   console.log("[SRE] Initiating cross-source external market & news synchronization...");
   try {
     const [priceData, marketCapData, coinGeckoData, newsGroup1, newsGroup2, newsGroup3] = await Promise.all([
@@ -403,6 +407,8 @@ async function syncGlobalIntelligence() {
     console.log(`[CORE_STORE] Telemetry Heartbeat Sync: ${kaspaMetrics.lastSyncTime}`);
   } catch (err) {
     console.error("[SRE] Cross-source external synchronicity failed. Using existing cache.", err);
+  } finally {
+    isSyncing = false;
   }
 }
 
@@ -412,11 +418,21 @@ setInterval(syncGlobalIntelligence, 60000);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
+
+  app.use(cors());
 
   // ---- State Orchestrator API Edge Worker ----
   app.get("/api/state", async (req, res) => {
     try {
+      // Lazy sync if stale (for serverless environments where setInterval may be killed)
+      const lastSyncStr = kaspaMetrics.lastSyncTime || new Date().toISOString();
+      const lastSync = new Date(lastSyncStr).getTime();
+      if (isNaN(lastSync) || Date.now() - lastSync > 120000) { 
+         console.log("[SRE] Data stale in serverless context. Triggering lazy sync...");
+         syncGlobalIntelligence(); // Fire and forget background sync
+      }
+
       // 1. Fetch real-time latency & health from real APIs + blockdag status
       const [kaspaRest, kaspaHashrate, kaspaHalving, kaspaBlockdag] = await Promise.all([
         fetchNodeHealth('https://api.kaspa.org/info/network'),

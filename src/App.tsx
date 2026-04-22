@@ -62,6 +62,7 @@ function MasterDetailsPanel({ data, subType, typeColor, stats, agentData, fullSt
         </div>
         <button 
           onClick={(e) => { 
+            playSelectSound();
             e.stopPropagation(); 
             onClose();
           }}
@@ -478,9 +479,18 @@ export default function App() {
   useEffect(() => {
     // Only create it once
     if (!audioRef.current) {
-        audioRef.current = new Audio();
-        audioRef.current.loop = true;
-        audioRef.current.volume = 0.20;
+        const audio = new Audio();
+        audio.loop = true;
+        audio.volume = 0.20;
+        audio.crossOrigin = "anonymous";
+        
+        // Listen for errors to reset state
+        audio.onerror = () => {
+          console.warn("[AUDIO]: Stream connection interrupted. Ready for retry.");
+          setAudioEnabled(false);
+        };
+        
+        audioRef.current = audio;
     }
   }, []);
 
@@ -512,39 +522,39 @@ export default function App() {
   }, [fullState?.current_metrics?.ambientTheme?.stream]);
 
   const toggleAudio = async () => {
+    playSelectSound();
     const audio = audioRef.current;
-    if (!audio || !fullState?.current_metrics?.ambientTheme?.stream) return;
+    if (!audio) return;
     
-    // Switching to Play
-    if (!audioEnabled) {
-      const streamUrl = fullState.current_metrics.ambientTheme.stream;
+    // Explicitly handle Chrome/Safari user interaction requirements by attempting to resume context if needed
+    if (audioEnabled) {
+      audio.pause();
+      setAudioEnabled(false);
+    } else {
+      const streamUrl = fullState?.current_metrics?.ambientTheme?.stream;
+      if (!streamUrl) return;
+
       if (audio.src !== streamUrl) {
           audio.src = streamUrl;
-          audio.load();
+          audio.load(); // Re-trigger load for the new source
       }
       
       try {
-        playPromiseRef.current = audio.play();
-        await playPromiseRef.current;
+        // We use a simpler direct play call to ensure responsiveness
+        await audio.play();
         setAudioEnabled(true);
       } catch (e) {
-        console.error("Audio playback error:", e);
-      } finally {
-        playPromiseRef.current = null;
-      }
-    } else {
-      // Switching to Pause
-      // If a play is in progress, we should wait for it or handle it carefully.
-      // Most browsers require play() to complete its internal state change before pause() works reliably.
-      if (playPromiseRef.current) {
+        console.warn("Audio Playback: Retrying with direct load...", e);
+        // Force a reload and retry on failure
+        audio.load();
         try {
-          await playPromiseRef.current;
-        } catch (e) {
-          // ignore play errors if we are pausing anyway
+           await audio.play();
+           setAudioEnabled(true);
+        } catch (err) {
+           console.error("Audio playback total failure:", err);
+           setAudioEnabled(false);
         }
       }
-      audio.pause();
-      setAudioEnabled(false);
     }
   };
 
@@ -900,6 +910,7 @@ function KaspaSun({ agentData, fullState, setFocusTarget, isSelected, onInteract
   const groupRef = useRef<THREE.Group>(null);
   
   const handleInteraction = (e: any) => {
+    playSelectSound();
     e.stopPropagation();
     if (isSelected) {
       onInteract();
@@ -1116,6 +1127,7 @@ function Planet({ distance, size, speed, angle, startY, color, hasRings, hasMoon
       
       <group ref={groupRef} name={id}
           onPointerDown={(e) => { 
+             playSelectSound();
              e.stopPropagation(); 
              if (isSelected) {
                 onInteract(null);
@@ -1270,6 +1282,7 @@ function DataNodeItem({ node, agentData, fullState, setFocusTarget, selectedNode
             
             <div 
               onPointerDown={(e) => { 
+                playSelectSound();
                 e.stopPropagation(); 
                 if (isSelected) {
                    setSelectedNode(null);
