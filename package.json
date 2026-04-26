@@ -7,11 +7,17 @@
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
     "build": "vite build",
+    "cap:sync": "npx cap sync",
+    "cap:add-android": "npx cap add android",
+    "cap:open-android": "npx cap open android",
     "preview": "vite preview --port 3000 --host 0.0.0.0",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.0",
     "@tailwindcss/vite": "^4.1.14",
